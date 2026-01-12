@@ -2,6 +2,7 @@
 Deployment management service
 """
 import logging
+import shlex  # [SECURITY] Import shlex for shell sanitization
 from datetime import datetime
 from ssh_manager import SSHManager
 from config import Config
@@ -49,7 +50,14 @@ class DeploymentService:
                 }
             
             script_name = self.script_mapping[deployment_type]
-            command = f"cd ~ && ./{script_name} {domain} {email}"
+            
+            # [SECURITY] Sanitize inputs to prevent Remote Command Injection
+            safe_domain = shlex.quote(domain)
+            safe_email = shlex.quote(email)
+            
+            # [SECURITY] Use sanitized variables in f-string
+            command = f"cd ~ && ./{script_name} {safe_domain} {safe_email}"
+            
             result = self.ssh_manager.execute_command(command)
             
             if result['success']:
@@ -96,7 +104,11 @@ class DeploymentService:
     
     def _stop_container(self, domain):
         """Stop container for domain"""
-        check_command = f"test -f /home/{domain}/docker-compose.yml && echo 'exists' || echo 'not found'"
+        # [SECURITY] Sanitize domain
+        safe_domain = shlex.quote(domain)
+        
+        # [SECURITY] Use sanitized domain
+        check_command = f"test -f /home/{safe_domain}/docker-compose.yml && echo 'exists' || echo 'not found'"
         check_result = self.ssh_manager.execute_command(check_command)
         
         if 'not found' in check_result.get('output', ''):
@@ -105,7 +117,8 @@ class DeploymentService:
                 'output': f"docker-compose.yml not found for {domain}"
             }
         
-        command = f"cd /home/{domain} && docker-compose stop"
+        # [SECURITY] Use sanitized domain
+        command = f"cd /home/{safe_domain} && docker-compose stop"
         result = self.ssh_manager.execute_command(command)
         
         return {
@@ -115,7 +128,11 @@ class DeploymentService:
     
     def _start_container(self, domain):
         """Start container for domain"""
-        check_command = f"test -f /home/{domain}/docker-compose.yml && echo 'exists' || echo 'not found'"
+        # [SECURITY] Sanitize domain
+        safe_domain = shlex.quote(domain)
+        
+        # [SECURITY] Use sanitized domain
+        check_command = f"test -f /home/{safe_domain}/docker-compose.yml && echo 'exists' || echo 'not found'"
         check_result = self.ssh_manager.execute_command(check_command)
         
         if 'not found' in check_result.get('output', ''):
@@ -124,7 +141,8 @@ class DeploymentService:
                 'output': f"docker-compose.yml not found for {domain}"
             }
         
-        command = f"cd /home/{domain} && docker-compose start"
+        # [SECURITY] Use sanitized domain
+        command = f"cd /home/{safe_domain} && docker-compose start"
         result = self.ssh_manager.execute_command(command)
         
         return {
@@ -142,6 +160,9 @@ class DeploymentService:
         
         script_name = self.delete_script_mapping[deployment_type]
         
+        # [SECURITY] Sanitize inputs
+        safe_domain = shlex.quote(domain)
+        
         # Check if script exists with shorter timeout (10 seconds)
         check_command = f"test -f ~/{script_name} && echo 'exists' || echo 'not found'"
         check_result = self.ssh_manager.execute_command(check_command, timeout=10)
@@ -153,7 +174,8 @@ class DeploymentService:
             }
         
         # Execute delete script with force kill if stuck (60 second limit + cleanup)
-        command = f"timeout 60 bash -c 'cd ~ && ./{script_name} {domain}' || (echo 'Delete operation timed out but continuing cleanup' && pkill -f '{script_name}' 2>/dev/null; rm -rf /home/{domain} 2>/dev/null; echo 'Forced cleanup completed')"
+        # [SECURITY] Use sanitized domain in command
+        command = f"timeout 60 bash -c 'cd ~ && ./{script_name} {safe_domain}' || (echo 'Delete operation timed out but continuing cleanup' && pkill -f '{script_name}' 2>/dev/null; rm -rf /home/{safe_domain} 2>/dev/null; echo 'Forced cleanup completed')"
         result = self.ssh_manager.execute_command(command, timeout=90)
         
         return {
@@ -163,4 +185,6 @@ class DeploymentService:
     
     def read_credentials_file(self, file_path):
         """Read credentials file from remote server"""
+        # [SECURITY] Note: file_path here comes from database (which we trust more than user input), 
+        # but paramiko sftp handles paths safely as string literals, not shell commands.
         return self.ssh_manager.read_remote_file(file_path)

@@ -8,11 +8,16 @@ from database import db_manager
 from deployment_service import DeploymentService
 from utils import str_to_datetime
 import traceback
+import re  # [SECURITY] Import re for validation
 
 logger = logging.getLogger(__name__)
 
 deployments_bp = Blueprint('deployments', __name__)
 deployment_service = DeploymentService()
+
+# [SECURITY] Strong Regex for Domain Validation
+# Allows: alphanumeric, hyphens, dots. No spaces, no special chars like ; | & $
+DOMAIN_REGEX = re.compile(r'^(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,6}$')
 
 def login_required(f):
     """Decorator to require login"""
@@ -67,6 +72,14 @@ def new_deployment():
         name = request.form['name']
         email = request.form['email']
         deployment_type = request.form['deployment_type']
+        
+        # [SECURITY] Validate Domain Name format
+        if not DOMAIN_REGEX.match(name):
+            flash('Invalid domain name format. Only letters, numbers, dashes, and dots allowed.', 'error')
+            return render_template('new_deployment.html', 
+                                  app_name=app_name, 
+                                  pre_selected_type=pre_selected_type)
+
         now = datetime.now()
         user_id = session['user_id']
         
@@ -129,6 +142,14 @@ def execute_deployment_api(id):
         email = deployment['email']
         deployment_type = deployment['deployment_type']
         
+        # [SECURITY] Double-check domain validation even here (Defense in Depth)
+        if not DOMAIN_REGEX.match(name):
+             return jsonify({
+                'success': False, 
+                'error': 'Invalid domain format detected', 
+                'output': 'Security validation failed for domain name.'
+            }), 400, response_headers
+
         logger.info("🚀 Starting deployment for deployment ID %s, Type: %s, User: %s", id, deployment_type, user_id)
         
         # FIXED: Update status to 'Pending' first to ensure it's counted correctly

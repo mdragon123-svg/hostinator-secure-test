@@ -15,7 +15,16 @@ class SSHManager:
     def create_ssh_client(self):
         """Create and return an SSH client connection"""
         ssh = paramiko.SSHClient()
-        ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        
+        # [SECURITY] Load system host keys to prevent MitM
+        ssh.load_system_host_keys()
+        
+        # [SECURITY] Use AutoAddPolicy only if strictly necessary, effectively works as 'soft' secure mode.
+        # Ideally, use RejectPolicy() in production if you have pre-populated known_hosts.
+        # For now, we will AutoAdd to avoid disruption but you should populate ~/.ssh/known_hosts
+        ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy()) 
+        # Uncomment below line for strict security (recommended for prod):
+        # ssh.set_missing_host_key_policy(paramiko.RejectPolicy())
         
         try:
             ssh.connect(
