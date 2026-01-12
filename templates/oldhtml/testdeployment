@@ -1,0 +1,354 @@
+{% extends "base.html" %}
+
+{% block title %}{{ deployment['name'] }} - Deployment Details{% endblock %}
+{% block header %}Deployment Details{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12 mb-4">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="card-title mb-0">{{ deployment['name'] }}</h5>
+                <span class="deployment-type {{ deployment['deployment_type'].lower() }}">
+                    {{ deployment['deployment_type'] }}
+                </span>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6 class="text-muted mb-3">Deployment Information</h6>
+                        <table class="table">
+                            <tbody>
+                                <tr>
+                                    <th scope="row" style="width: 30%;">Domain</th>
+                                    <td>{{ deployment['name'] }}</td>
+                                </tr>
+                                <tr>
+                                    <th scope="row">Email</th>
+                                    <td>{{ deployment['email'] }}</td>
+                                </tr>
+                                <tr>
+                                    <th scope="row">Status</th>
+                                    <td>
+                                        {% if deployment['status'] == 'Active' %}
+                                            <span class="badge bg-success">Active</span>
+                                        {% elif deployment['status'] == 'Inactive' %}
+                                            <span class="badge bg-danger">Inactive</span>
+                                        {% else %}
+                                            <span class="badge bg-warning text-dark">Pending</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <th scope="row">Type</th>
+                                    <td>{{ deployment['deployment_type'] }}</td>
+                                </tr>
+                                <tr>
+                                    <th scope="row">Created</th>
+                                    <td>{{ deployment['created_at'].strftime('%Y-%m-%d %H:%M') }}</td>
+                                </tr>
+                                <tr>
+                                    <th scope="row">Last Updated</th>
+                                    <td>{{ deployment['last_updated'].strftime('%Y-%m-%d %H:%M') }}</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="col-md-6">
+                        <h6 class="text-muted mb-3">Actions</h6>
+                        <div class="d-grid gap-2">
+                            {% if deployment['status'] == 'Active' %}
+                                <form action="{{ url_for('deployments.update_deployment_status', id=deployment['id']) }}" method="post">
+                                    <input type="hidden" name="status" value="Inactive">
+                                    <input type="hidden" name="action" value="stop">
+                                    <button type="submit" class="btn btn-warning w-100">
+                                        <i class="bi bi-stop-circle me-2"></i> Stop Deployment
+                                    </button>
+                                </form>
+                                
+                                <!-- Smart Visit Site Button -->
+                                <button type="button" class="btn btn-primary w-100 mt-2" onclick="visitSite('{{ deployment['name'] }}')">
+                                    <i class="bi bi-box-arrow-up-right me-2"></i> Visit Site
+                                </button>
+                                
+                                <!-- Quick Protocol Switch (subtle helper) -->
+                                <div class="d-flex justify-content-center mt-2">
+                                    <small class="text-muted">
+                                        SSL issues? 
+                                        <a href="#" onclick="forceHTTP('{{ deployment['name'] }}'); return false;" class="text-decoration-none">
+                                            Try HTTP instead
+                                        </a>
+                                    </small>
+                                </div>
+                                
+                            {% elif deployment['status'] == 'Inactive' %}
+                                <form action="{{ url_for('deployments.update_deployment_status', id=deployment['id']) }}" method="post">
+                                    <input type="hidden" name="status" value="Active">
+                                    <input type="hidden" name="action" value="start">
+                                    <button type="submit" class="btn btn-success w-100">
+                                        <i class="bi bi-play-circle me-2"></i> Start Deployment
+                                    </button>
+                                </form>
+                                <button type="button" class="btn btn-danger w-100 mt-2" data-bs-toggle="modal" data-bs-target="#deleteModal">
+                                    <i class="bi bi-trash me-2"></i> Delete Deployment
+                                </button>
+                            {% else %}
+                                <div class="alert alert-info">
+                                    <i class="bi bi-info-circle me-2"></i>
+                                    This deployment is pending. Please wait for the deployment process to complete.
+                                </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- SSL Warning Modal -->
+<div class="modal fade" id="sslWarningModal" tabindex="-1" aria-labelledby="sslWarningModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-warning">
+                <h5 class="modal-title" id="sslWarningModalLabel">
+                    <i class="bi bi-shield-exclamation me-2"></i>SSL Certificate Notice
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p><strong>The site opened in a new tab.</strong></p>
+                
+                <p>If you see a security warning:</p>
+                <ol>
+                    <li>Click <strong>"Advanced"</strong> or <strong>"Details"</strong></li>
+                    <li>Click <strong>"Proceed to site"</strong> (unsafe)</li>
+                </ol>
+                
+                <div class="alert alert-info mt-3">
+                    <i class="bi bi-info-circle me-2"></i>
+                    This is normal for test deployments without SSL certificates.
+                </div>
+                
+                <p class="mb-0">Can't access the site?</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-primary" onclick="forceHTTP(currentDomain); bootstrap.Modal.getInstance(document.getElementById('sslWarningModal')).hide();">
+                    <i class="bi bi-unlock me-2"></i>Try HTTP Instead
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Delete Confirmation Modal -->
+<div class="modal fade" id="deleteModal" tabindex="-1" aria-labelledby="deleteModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="deleteModalLabel">Confirm Deletion</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                Are you sure you want to delete the deployment <strong>{{ deployment['name'] }}</strong>? This action will permanently remove the deployment and all associated data.
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <form action="{{ url_for('deployments.delete_deployment', id=deployment['id']) }}" method="post">
+                    <button type="submit" class="btn btn-danger">Delete</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% if credentials_content %}
+<div class="row">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="card-title mb-0">Deployment Credentials</h5>
+                <button class="btn btn-sm btn-outline-secondary" onclick="copyAllCredentials()">
+                    <i class="bi bi-clipboard"></i> Copy All
+                </button>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-bordered">
+                        <tbody id="credentials-table">
+                            {% for line in credentials_content.strip().split('\n') %}
+                                {% if ':' in line %}
+                                    {% set parts = line.split(':', 1) %}
+                                    <tr>
+                                        <th style="width: 40%;">{{ parts[0] }}</th>
+                                        <td class="d-flex justify-content-between align-items-center">
+                                            <span class="credential-value">{{ parts[1].strip() }}</span>
+                                            <button class="btn btn-sm btn-outline-secondary copy-btn" 
+                                                    onclick="copyCredentialValue(this)" 
+                                                    data-value="{{ parts[1].strip() }}">
+                                                <i class="bi bi-clipboard"></i>
+                                            </button>
+                                        </td>
+                                    </tr>
+                                {% else %}
+                                    <tr>
+                                        <td colspan="2">{{ line }}</td>
+                                    </tr>
+                                {% endif %}
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<div class="row">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Deployment Logs</h5>
+            </div>
+            <div class="card-body">
+                <div class="deployment-logs bg-dark text-light p-3 rounded">
+                    <pre class="mb-0"><code>
+[{{ deployment['created_at'].strftime('%Y-%m-%d %H:%M:%S') }}] Deployment initiated
+[{{ deployment['created_at'].strftime('%Y-%m-%d %H:%M:%S') }}] Preparing environment
+[{{ deployment['created_at'].strftime('%Y-%m-%d %H:%M:%S') }}] Pulling latest code from repository
+[{{ deployment['created_at'].strftime('%Y-%m-%d %H:%M:%S') }}] Building application
+[{{ deployment['created_at'].strftime('%Y-%m-%d %H:%M:%S') }}] Running tests
+[{{ deployment['created_at'].strftime('%Y-%m-%d %H:%M:%S') }}] Tests passed successfully
+[{{ deployment['created_at'].strftime('%Y-%m-%d %H:%M:%S') }}] Deploying to production environment
+[{{ deployment['last_updated'].strftime('%Y-%m-%d %H:%M:%S') }}] Deployment completed successfully
+[{{ deployment['last_updated'].strftime('%Y-%m-%d %H:%M:%S') }}] Service is now {{ deployment['status'] }}
+                    </code></pre>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    let currentDomain = '';
+    let siteWindow = null;
+    
+    // Smart visit site function
+    function visitSite(domain) {
+        currentDomain = domain;
+        
+        // Check if we've stored a preference for this domain
+        const preferHTTP = sessionStorage.getItem(`prefer_http_${domain}`) === 'true';
+        
+        if (preferHTTP) {
+            // User previously had issues with HTTPS, go straight to HTTP
+            window.open('http://' + domain, '_blank');
+        } else {
+            // Try HTTPS first
+            const httpsUrl = 'https://' + domain;
+            siteWindow = window.open(httpsUrl, '_blank');
+            
+            // Show helpful modal after a short delay
+            setTimeout(() => {
+                const modal = new bootstrap.Modal(document.getElementById('sslWarningModal'));
+                modal.show();
+            }, 1500);
+        }
+    }
+    
+    // Force HTTP connection
+    function forceHTTP(domain) {
+        // Remember this preference for the session
+        sessionStorage.setItem(`prefer_http_${domain}`, 'true');
+        
+        // Close the HTTPS window if it's still open
+        if (siteWindow && !siteWindow.closed) {
+            siteWindow.close();
+        }
+        
+        // Open with HTTP
+        window.open('http://' + domain, '_blank');
+    }
+    
+    // Advanced: Smart protocol detection (optional enhancement)
+    function smartVisitSite(domain) {
+        currentDomain = domain;
+        
+        // Deployment type specific logic
+        const deploymentType = '{{ deployment["deployment_type"] }}';
+        
+        // Services that usually have their own login pages
+        const servicesWithAuth = ['WordPress', 'NextCloud', 'Moodle', 'Ghost', 'Metabase', 'Jupyter'];
+        
+        // For known services, try HTTP first during testing
+        if (servicesWithAuth.includes(deploymentType)) {
+            // These services redirect to their own login, so HTTP is safer for testing
+            window.open('http://' + domain, '_blank');
+        } else {
+            // For other services, try HTTPS first
+            visitSite(domain);
+        }
+    }
+
+    // Copy individual credential value
+    function copyCredentialValue(button) {
+        const value = button.getAttribute('data-value');
+        
+        const textarea = document.createElement('textarea');
+        textarea.value = value;
+        textarea.setAttribute('readonly', '');
+        textarea.style.position = 'absolute';
+        textarea.style.left = '-9999px';
+        document.body.appendChild(textarea);
+        
+        textarea.select();
+        document.execCommand('copy');
+        
+        document.body.removeChild(textarea);
+        
+        const icon = button.querySelector('i');
+        icon.classList.remove('bi-clipboard');
+        icon.classList.add('bi-check');
+        
+        setTimeout(() => {
+            icon.classList.remove('bi-check');
+            icon.classList.add('bi-clipboard');
+        }, 1500);
+    }
+    
+    // Copy all credentials
+    function copyAllCredentials() {
+        const content = Array.from(document.querySelectorAll('.credential-value'))
+                             .map(el => el.textContent)
+                             .join('\n');
+        
+        const textarea = document.createElement('textarea');
+        textarea.value = content;
+        textarea.setAttribute('readonly', '');
+        textarea.style.position = 'absolute';
+        textarea.style.left = '-9999px';
+        document.body.appendChild(textarea);
+        
+        textarea.select();
+        document.execCommand('copy');
+        
+        document.body.removeChild(textarea);
+        
+        alert('All credentials copied to clipboard!');
+    }
+    
+    // Clear protocol preferences on page load (optional - remove if you want to keep preferences)
+    window.addEventListener('load', () => {
+        // Uncomment to clear preferences each time page loads
+        // Object.keys(sessionStorage).forEach(key => {
+        //     if (key.startsWith('prefer_http_')) {
+        //         sessionStorage.removeItem(key);
+        //     }
+        // });
+    });
+</script>
+{% endblock %}

@@ -1,0 +1,271 @@
+{% extends "base.html" %}
+
+{% block title %}{{ deployment['name'] }} - Deployment Details{% endblock %}
+{% block header %}Deployment Details{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12 mb-4">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="card-title mb-0">{{ deployment['name'] }}</h5>
+                <span class="deployment-type {{ deployment['deployment_type'].lower() }}">
+                    {{ deployment['deployment_type'] }}
+                </span>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6 class="text-muted mb-3">Deployment Information</h6>
+                        <table class="table">
+                            <tbody>
+                                <tr>
+                                    <th scope="row" style="width: 30%;">Domain</th>
+                                    <td>{{ deployment['name'] }}</td>
+                                </tr>
+                                <tr>
+                                    <th scope="row">Email</th>
+                                    <td>{{ deployment['email'] }}</td>
+                                </tr>
+                                <tr>
+                                    <th scope="row">Status</th>
+                                    <td>
+                                        {% if deployment['status'] == 'Active' %}
+                                            <span class="badge bg-success">Active</span>
+                                        {% elif deployment['status'] == 'Inactive' %}
+                                            <span class="badge bg-danger">Inactive</span>
+                                        {% else %}
+                                            <span class="badge bg-warning text-dark">Pending</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <th scope="row">Type</th>
+                                    <td>{{ deployment['deployment_type'] }}</td>
+                                </tr>
+                                <tr>
+                                    <th scope="row">Created</th>
+                                    <td>{{ deployment['created_at'].strftime('%Y-%m-%d %H:%M') }}</td>
+                                </tr>
+                                <tr>
+                                    <th scope="row">Last Updated</th>
+                                    <td>{{ deployment['last_updated'].strftime('%Y-%m-%d %H:%M') }}</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="col-md-6">
+                        <h6 class="text-muted mb-3">Actions</h6>
+                        <div class="d-grid gap-2">
+                            {% if deployment['status'] == 'Active' %}
+                                <form action="{{ url_for('deployments.update_deployment_status', id=deployment['id']) }}" method="post">
+                                    <input type="hidden" name="status" value="Inactive">
+                                    <input type="hidden" name="action" value="stop">
+                                    <button type="submit" class="btn btn-warning w-100">
+                                        <i class="bi bi-stop-circle me-2"></i> Stop Deployment
+                                    </button>
+                                </form>
+                                
+                                <!-- HTTP/HTTPS Access Options -->
+                                <div class="btn-group w-100 mt-2" role="group">
+                                    <a href="http://{{ deployment['name'] }}" target="_blank" class="btn btn-primary">
+                                        <i class="bi bi-box-arrow-up-right me-2"></i> Visit Site (HTTP)
+                                    </a>
+                                    <button type="button" class="btn btn-outline-primary" onclick="tryHTTPS('{{ deployment['name'] }}')">
+                                        <i class="bi bi-lock me-2"></i> Try HTTPS
+                                    </button>
+                                </div>
+                                
+                                <!-- Quick Access Info -->
+                                <div class="alert alert-info mt-2 mb-0">
+                                    <small>
+                                        <i class="bi bi-info-circle me-1"></i>
+                                        <strong>Access URLs:</strong><br>
+                                        HTTP: <code>http://{{ deployment['name'] }}</code><br>
+                                        HTTPS: <code>https://{{ deployment['name'] }}</code>
+                                    </small>
+                                </div>
+                            {% elif deployment['status'] == 'Inactive' %}
+                                <form action="{{ url_for('deployments.update_deployment_status', id=deployment['id']) }}" method="post">
+                                    <input type="hidden" name="status" value="Active">
+                                    <input type="hidden" name="action" value="start">
+                                    <button type="submit" class="btn btn-success w-100">
+                                        <i class="bi bi-play-circle me-2"></i> Start Deployment
+                                    </button>
+                                </form>
+                                <button type="button" class="btn btn-danger w-100 mt-2" data-bs-toggle="modal" data-bs-target="#deleteModal">
+                                    <i class="bi bi-trash me-2"></i> Delete Deployment
+                                </button>
+                            {% else %}
+                                <div class="alert alert-info">
+                                    <i class="bi bi-info-circle me-2"></i>
+                                    This deployment is pending. Please wait for the deployment process to complete.
+                                </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Delete Confirmation Modal -->
+<div class="modal fade" id="deleteModal" tabindex="-1" aria-labelledby="deleteModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="deleteModalLabel">Confirm Deletion</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                Are you sure you want to delete the deployment <strong>{{ deployment['name'] }}</strong>? This action will permanently remove the deployment and all associated data.
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <form action="{{ url_for('deployments.delete_deployment', id=deployment['id']) }}" method="post">
+                    <button type="submit" class="btn btn-danger">Delete</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% if credentials_content %}
+<div class="row">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="card-title mb-0">Deployment Credentials</h5>
+                <button class="btn btn-sm btn-outline-secondary" onclick="copyAllCredentials()">
+                    <i class="bi bi-clipboard"></i> Copy All
+                </button>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-bordered">
+                        <tbody id="credentials-table">
+                            {% for line in credentials_content.strip().split('\n') %}
+                                {% if ':' in line %}
+                                    {% set parts = line.split(':', 1) %}
+                                    <tr>
+                                        <th style="width: 40%;">{{ parts[0] }}</th>
+                                        <td class="d-flex justify-content-between align-items-center">
+                                            <span class="credential-value">{{ parts[1].strip() }}</span>
+                                            <button class="btn btn-sm btn-outline-secondary copy-btn" 
+                                                    onclick="copyCredentialValue(this)" 
+                                                    data-value="{{ parts[1].strip() }}">
+                                                <i class="bi bi-clipboard"></i>
+                                            </button>
+                                        </td>
+                                    </tr>
+                                {% else %}
+                                    <tr>
+                                        <td colspan="2">{{ line }}</td>
+                                    </tr>
+                                {% endif %}
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<div class="row">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Deployment Logs</h5>
+            </div>
+            <div class="card-body">
+                <div class="deployment-logs bg-dark text-light p-3 rounded">
+                    <pre class="mb-0"><code>
+[{{ deployment['created_at'].strftime('%Y-%m-%d %H:%M:%S') }}] Deployment initiated
+[{{ deployment['created_at'].strftime('%Y-%m-%d %H:%M:%S') }}] Preparing environment
+[{{ deployment['created_at'].strftime('%Y-%m-%d %H:%M:%S') }}] Pulling latest code from repository
+[{{ deployment['created_at'].strftime('%Y-%m-%d %H:%M:%S') }}] Building application
+[{{ deployment['created_at'].strftime('%Y-%m-%d %H:%M:%S') }}] Running tests
+[{{ deployment['created_at'].strftime('%Y-%m-%d %H:%M:%S') }}] Tests passed successfully
+[{{ deployment['created_at'].strftime('%Y-%m-%d %H:%M:%S') }}] Deploying to production environment
+[{{ deployment['last_updated'].strftime('%Y-%m-%d %H:%M:%S') }}] Deployment completed successfully
+[{{ deployment['last_updated'].strftime('%Y-%m-%d %H:%M:%S') }}] Service is now {{ deployment['status'] }}
+                    </code></pre>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Try HTTPS with warning
+    function tryHTTPS(domain) {
+        const httpsUrl = 'https://' + domain;
+        
+        // Show warning modal
+        if (confirm('⚠️ SSL Certificate Warning\n\nYou may see a browser security warning if SSL certificates are not properly configured.\n\nIf you see a warning:\n1. Click "Advanced" or "Details"\n2. Click "Proceed to site" (unsafe)\n\nDo you want to continue?')) {
+            window.open(httpsUrl, '_blank');
+        }
+    }
+
+    // Copy individual credential value
+    function copyCredentialValue(button) {
+        const value = button.getAttribute('data-value');
+        
+        // Create a temporary textarea element to copy from
+        const textarea = document.createElement('textarea');
+        textarea.value = value;
+        textarea.setAttribute('readonly', '');
+        textarea.style.position = 'absolute';
+        textarea.style.left = '-9999px';
+        document.body.appendChild(textarea);
+        
+        // Select and copy the text
+        textarea.select();
+        document.execCommand('copy');
+        
+        // Remove the temporary element
+        document.body.removeChild(textarea);
+        
+        // Change button icon temporarily to show success
+        const icon = button.querySelector('i');
+        icon.classList.remove('bi-clipboard');
+        icon.classList.add('bi-check');
+        
+        setTimeout(() => {
+            icon.classList.remove('bi-check');
+            icon.classList.add('bi-clipboard');
+        }, 1500);
+    }
+    
+    // Copy all credentials
+    function copyAllCredentials() {
+        const content = document.getElementById('credentialsContent') ? 
+                        document.getElementById('credentialsContent').textContent : 
+                        Array.from(document.querySelectorAll('.credential-value'))
+                             .map(el => el.textContent)
+                             .join('\n');
+        
+        // Create a temporary textarea element to copy from
+        const textarea = document.createElement('textarea');
+        textarea.value = content;
+        textarea.setAttribute('readonly', '');
+        textarea.style.position = 'absolute';
+        textarea.style.left = '-9999px';
+        document.body.appendChild(textarea);
+        
+        // Select and copy the text
+        textarea.select();
+        document.execCommand('copy');
+        
+        // Remove the temporary element
+        document.body.removeChild(textarea);
+        
+        alert('All credentials copied to clipboard!');
+    }
+</script>
+{% endblock %}

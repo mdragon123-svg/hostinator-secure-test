@@ -1,0 +1,451 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - Hostinator{% endblock %}
+{% block header %}Dashboard{% endblock %}
+
+{% block content %}
+<!-- Stats Cards Row -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card text-white bg-primary">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="card-title">Total Deployments</h6>
+                        <h2 class="card-text">{{ total_deployments }}</h2>
+                    </div>
+                    <i class="bi bi-cloud-check fs-1"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-white bg-success">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="card-title">Active</h6>
+                        <h2 class="card-text">{{ active_deployments }}</h2>
+                    </div>
+                    <i class="bi bi-check-circle fs-1"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-white bg-warning">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="card-title">Pending</h6>
+                        <h2 class="card-text">{{ pending_deployments }}</h2>
+                    </div>
+                    <i class="bi bi-hourglass-split fs-1"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-white bg-danger">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="card-title">Inactive</h6>
+                        <h2 class="card-text">{{ inactive_deployments }}</h2>
+                    </div>
+                    <i class="bi bi-x-circle fs-1"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Recent Deployments Table - Full Width -->
+<div class="row mb-4">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="card-title mb-0">Recent Deployments</h5>
+                <a href="{{ url_for('deployments.new_deployment') }}" class="btn btn-sm btn-primary">
+                    <i class="bi bi-plus-circle me-1"></i> New Deployment
+                </a>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Domain</th>
+                                <th>Email</th>
+                                <th>Type</th>
+                                <th>Status</th>
+                                <th>Last Updated</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for deployment in deployments %}
+                            <tr>
+                                <td>{{ deployment['name'] }}</td>
+                                <td>{{ deployment['email'] }}</td>
+                                <td>
+                                    <span class="deployment-type {{ deployment['deployment_type'].lower() }}">
+                                        {{ deployment['deployment_type'] }}
+                                    </span>
+                                </td>
+                                <td>
+                                    {% if deployment['status'] == 'Active' %}
+                                        <span class="badge bg-success">Active</span>
+                                    {% elif deployment['status'] == 'Inactive' %}
+                                        <span class="badge bg-danger">Inactive</span>
+                                    {% else %}
+                                        <span class="badge bg-warning text-dark">Pending</span>
+                                    {% endif %}
+                                </td>
+                                <td>{{ deployment['last_updated'].strftime('%Y-%m-%d %H:%M') }}</td>
+                                <td>
+                                    <div class="btn-group">
+                                        <a href="{{ url_for('deployments.deployment_detail', id=deployment['id']) }}" class="btn btn-sm btn-outline-primary">
+                                            <i class="bi bi-eye"></i>
+                                        </a>
+                                        <button type="button" class="btn btn-sm btn-outline-info" 
+                                                onclick="viewCredentials({{ deployment['id'] }}, '{{ deployment['name'] }}')"
+                                                {% if not deployment['credentials_file'] %}disabled{% endif %}>
+                                            <i class="bi bi-key"></i>
+                                        </button>
+                                        <button type="button" class="btn btn-sm btn-outline-danger" onclick="showDeleteModal('{{ deployment['name'] }}', {{ deployment['id'] }})">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Charts Row - Side by Side -->
+<div class="row">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Deployment Types</h5>
+            </div>
+            <div class="card-body">
+                <canvas id="deploymentTypesChart" style="max-height: 300px;"></canvas>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Deployment Status</h5>
+            </div>
+            <div class="card-body">
+                <canvas id="deploymentStatusChart" style="max-height: 300px;"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Delete Modal -->
+<div class="modal fade" id="deleteModal" tabindex="-1" aria-labelledby="deleteModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="deleteModalLabel">Confirm Deletion</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                Are you sure you want to delete the deployment <strong id="deleteDeploymentName"></strong>? This action will permanently remove the deployment and all associated data.
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-danger" onclick="confirmDelete()">Delete</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Credentials Modal -->
+<div class="modal fade" id="credentialsModal" tabindex="-1" aria-labelledby="credentialsModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="credentialsModalLabel">Deployment Credentials</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="d-flex justify-content-between mb-2">
+                    <h6 id="credentialsDomain"></h6>
+                    <button class="btn btn-sm btn-outline-secondary" onclick="copyAllCredentials()">
+                        <i class="bi bi-clipboard"></i> Copy All
+                    </button>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-bordered">
+                        <tbody id="credentials-table-modal">
+                            <!-- Credentials will be inserted here -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Hidden form for delete operations -->
+<form id="deleteForm" method="POST" style="display: none;">
+    <!-- Form action will be set by JavaScript -->
+</form>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Variables to handle delete modal
+    let pendingDeleteId = null;
+    let deleteModalInstance = null;
+
+    // Function to show delete modal
+    function showDeleteModal(deploymentName, deploymentId) {
+        pendingDeleteId = deploymentId;
+        document.getElementById('deleteDeploymentName').textContent = deploymentName;
+        
+        if (!deleteModalInstance) {
+            deleteModalInstance = new bootstrap.Modal(document.getElementById('deleteModal'));
+        }
+        deleteModalInstance.show();
+    }
+
+    // Function to confirm delete
+    function confirmDelete() {
+        if (pendingDeleteId) {
+            // Hide modal first
+            deleteModalInstance.hide();
+            
+            // Set form action and submit after a small delay
+            setTimeout(() => {
+                const form = document.getElementById('deleteForm');
+                form.action = `/deployment/delete/${pendingDeleteId}`;
+                form.submit();
+            }, 200);
+        }
+    }
+
+    // Deployment Types Chart with more colors
+    const typeCtx = document.getElementById('deploymentTypesChart').getContext('2d');
+    const typeData = {
+        labels: [{% for type, count in deployment_types.items() %}'{{ type }}',{% endfor %}],
+        datasets: [{
+            data: [{% for type, count in deployment_types.items() %}{{ count }},{% endfor %}],
+            backgroundColor: [
+                '#0d6efd',  // Blue - Primary color
+                '#28a745',  // Green - Success
+                '#ffc107',  // Yellow/Gold
+                '#dc3545',  // Red
+                '#6610f2',  // Purple
+                '#17a2b8',  // Cyan
+                '#e83e8c',  // Pink
+                '#fd7e14',  // Orange
+                '#20c997',  // Teal
+                '#6c757d',  // Gray
+                '#343a40',  // Dark
+                '#007bff'   // Light Blue
+            ],
+            hoverBackgroundColor: [
+                '#0b5ed7',  // Darker Blue
+                '#218838',  // Darker Green
+                '#e0a800',  // Darker Yellow
+                '#c82333',  // Darker Red
+                '#560bd0',  // Darker Purple
+                '#138496',  // Darker Cyan
+                '#d91a5c',  // Darker Pink
+                '#e96200',  // Darker Orange
+                '#1aa179',  // Darker Teal
+                '#5a6268',  // Darker Gray
+                '#23272b',  // Darker Dark
+                '#0056b3'   // Darker Light Blue
+            ],
+            hoverBorderColor: "rgba(234, 236, 244, 1)",
+        }]
+    };
+    new Chart(typeCtx, {
+        type: 'doughnut',
+        data: typeData,
+        options: {
+            maintainAspectRatio: true,
+            aspectRatio: 1.5,
+            plugins: {
+                legend: {
+                    position: 'bottom',
+                    labels: {
+                        padding: 10,
+                        font: {
+                            size: 11
+                        }
+                    }
+                }
+            },
+            cutout: '70%'
+        }
+    });
+
+    // Deployment Status Chart
+    const statusCtx = document.getElementById('deploymentStatusChart').getContext('2d');
+    const statusData = {
+        labels: ['Active', 'Inactive', 'Pending'],
+        datasets: [{
+            label: 'Number of Deployments',
+            data: [{{ active_deployments }}, {{ inactive_deployments }}, {{ pending_deployments }}],
+            backgroundColor: [
+                'rgba(40, 167, 69, 0.7)',
+                'rgba(220, 53, 69, 0.7)',
+                'rgba(255, 193, 7, 0.7)'
+            ],
+            borderColor: [
+                'rgb(40, 167, 69)',
+                'rgb(220, 53, 69)',
+                'rgb(255, 193, 7)'
+            ],
+            borderWidth: 1
+        }]
+    };
+    new Chart(statusCtx, {
+        type: 'bar',
+        data: statusData,
+        options: {
+            maintainAspectRatio: true,
+            aspectRatio: 1.5,
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        precision: 0
+                    }
+                }
+            },
+            plugins: {
+                legend: {
+                    display: false  // Hide legend for bar chart to save space
+                }
+            }
+        }
+    });
+
+    // View credentials function
+    function viewCredentials(id, domain) {
+        const credentialsModal = new bootstrap.Modal(document.getElementById('credentialsModal'));
+        document.getElementById('credentialsDomain').textContent = domain;
+        document.getElementById('credentials-table-modal').innerHTML = '<tr><td colspan="2">Loading...</td></tr>';
+        
+        fetch(`/deployment/credentials/${id}`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    document.getElementById('credentials-table-modal').innerHTML = 
+                        `<tr><td colspan="2">Error: ${data.error}</td></tr>`;
+                } else {
+                    const credentialsTable = document.getElementById('credentials-table-modal');
+                    credentialsTable.innerHTML = '';
+                    
+                    // Parse and display credentials
+                    const lines = data.credentials.split('\n');
+                    lines.forEach(line => {
+                        if (line.trim() === '') return;
+                        
+                        const row = document.createElement('tr');
+                        
+                        if (line.includes(':')) {
+                            const parts = line.split(':', 1);
+                            const key = parts[0];
+                            const value = line.substring(key.length + 1).trim();
+                            
+                            row.innerHTML = `
+                                <th style="width: 40%;">${key}</th>
+                                <td class="d-flex justify-content-between align-items-center">
+                                    <span class="credential-value">${value}</span>
+                                    <button class="btn btn-sm btn-outline-secondary copy-btn" 
+                                            onclick="copyCredentialValue(this)" 
+                                            data-value="${value}">
+                                        <i class="bi bi-clipboard"></i>
+                                    </button>
+                                </td>
+                            `;
+                        } else {
+                            row.innerHTML = `<td colspan="2">${line}</td>`;
+                        }
+                        
+                        credentialsTable.appendChild(row);
+                    });
+                }
+            })
+            .catch(error => {
+                document.getElementById('credentials-table-modal').innerHTML = 
+                    `<tr><td colspan="2">Error: ${error.message}</td></tr>`;
+            });
+        
+        credentialsModal.show();
+    }
+
+    // Copy individual credential value
+    function copyCredentialValue(button) {
+        const value = button.getAttribute('data-value');
+        
+        // Create a temporary textarea element to copy from
+        const textarea = document.createElement('textarea');
+        textarea.value = value;
+        textarea.setAttribute('readonly', '');
+        textarea.style.position = 'absolute';
+        textarea.style.left = '-9999px';
+        document.body.appendChild(textarea);
+        
+        // Select and copy the text
+        textarea.select();
+        document.execCommand('copy');
+        
+        // Remove the temporary element
+        document.body.removeChild(textarea);
+        
+        // Change button icon temporarily to show success
+        const icon = button.querySelector('i');
+        icon.classList.remove('bi-clipboard');
+        icon.classList.add('bi-check');
+        
+        setTimeout(() => {
+            icon.classList.remove('bi-check');
+            icon.classList.add('bi-clipboard');
+        }, 1500);
+    }
+
+    // Copy all credentials
+    function copyAllCredentials() {
+        const values = Array.from(document.querySelectorAll('.credential-value'))
+                           .map(el => el.textContent)
+                           .join('\n');
+        
+        // Create a temporary textarea element to copy from
+        const textarea = document.createElement('textarea');
+        textarea.value = values;
+        textarea.setAttribute('readonly', '');
+        textarea.style.position = 'absolute';
+        textarea.style.left = '-9999px';
+        document.body.appendChild(textarea);
+        
+        // Select and copy the text
+        textarea.select();
+        document.execCommand('copy');
+        
+        // Remove the temporary element
+        document.body.removeChild(textarea);
+        
+        alert('All credentials copied to clipboard!');
+    }
+</script>
+{% endblock %}

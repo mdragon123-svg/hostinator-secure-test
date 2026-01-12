@@ -1,0 +1,241 @@
+{% extends "base.html" %}
+
+{% block title %}
+    {% if app_name %}
+        Deploy {{ app_name }} - Hostinator
+    {% else %}
+        New Deployment - Hostinator
+    {% endif %}
+{% endblock %}
+
+{% block header %}
+    {% if app_name %}
+        Deploy {{ app_name }}
+    {% else %}
+        Create New Deployment
+    {% endif %}
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-8 mx-auto">
+        {% if app_name %}
+        <!-- Marketplace deployment header -->
+        <div class="card mb-4 bg-primary text-white">
+            <div class="card-body">
+                <div class="row align-items-center">
+                    <div class="col-md-8">
+                        <h5 class="card-title mb-2">
+                            <i class="bi bi-rocket-takeoff me-2"></i>
+                            Deploying {{ app_name }}
+                        </h5>
+                        <p class="card-text mb-0">
+                            You're about to deploy {{ app_name }} from the marketplace. 
+                            Fill in the details below to get started.
+                        </p>
+                    </div>
+                    <div class="col-md-4 text-center">
+                        <i class="bi bi-cloud-arrow-up" style="font-size: 3rem; opacity: 0.8;"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    {% if app_name %}
+                        {{ app_name }} Deployment Configuration
+                    {% else %}
+                        Deployment Details
+                    {% endif %}
+                </h5>
+            </div>
+            <div class="card-body">
+                <form method="post">
+                    <div class="mb-3">
+                        <label for="name" class="form-label">
+                            <i class="bi bi-globe me-2"></i>Domain Name
+                        </label>
+                        <input type="text" class="form-control" id="name" name="name" required 
+                               placeholder="example.com">
+                        <div class="form-text">
+                            Enter the domain name for your {{ app_name if app_name else 'deployment' }} 
+                            (e.g., example.com)
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="email" class="form-label">
+                            <i class="bi bi-envelope me-2"></i>Email Address
+                        </label>
+                        <input type="email" class="form-control" id="email" name="email" required
+                               placeholder="your@email.com">
+                        <div class="form-text">
+                            Enter your email address for notifications and SSL certificates
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="deployment_type" class="form-label">
+                            <i class="bi bi-layers me-2"></i>Deployment Type
+                        </label>
+                        {% if pre_selected_type %}
+                            <!-- Pre-selected from marketplace -->
+                            <select class="form-select" id="deployment_type" name="deployment_type" required readonly>
+                                <option value="{{ pre_selected_type }}" selected>{{ pre_selected_type }}</option>
+                            </select>
+                            <div class="form-text text-success">
+                                <i class="bi bi-check-circle me-1"></i>
+                                Pre-selected from marketplace: {{ app_name }}
+                            </div>
+                        {% else %}
+                            <!-- Manual selection -->
+                            <select class="form-select" id="deployment_type" name="deployment_type" required>
+                                <option value="" selected disabled>Select a deployment type</option>
+                                <option value="WordPress">WordPress</option>
+                                <option value="NextCloud">NextCloud</option>
+                                <option value="Moodle">Moodle</option>
+                                <option value="Zabbix">Zabbix</option>
+                                <option value="Joomla">Joomla</option>
+                                <option value="Ghost">Ghost</option>
+                                <option value="Metabase">Metabase</option>
+                                <option value="Jupyter">Jupyter</option>
+                            </select>
+                            <div class="form-text">
+                                Select the type of application you want to deploy. 
+                                <a href="{{ url_for('marketplace.marketplace') }}" class="text-decoration-none">
+                                    Browse marketplace <i class="bi bi-arrow-right"></i>
+                                </a>
+                            </div>
+                        {% endif %}
+                    </div>
+
+                    {% if app_name %}
+                    <!-- Deployment preview for marketplace apps -->
+                    <div class="mb-4">
+                        <div class="card bg-light">
+                            <div class="card-header">
+                                <h6 class="mb-0">
+                                    <i class="bi bi-eye me-2"></i>Deployment Preview
+                                </h6>
+                            </div>
+                            <div class="card-body">
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <strong>Application:</strong> {{ app_name }}<br>
+                                        <strong>Type:</strong> {{ pre_selected_type }}<br>
+                                        <strong>Status:</strong> <span class="badge bg-warning">Ready to Deploy</span>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <strong>Features:</strong><br>
+                                        <small class="text-muted">
+                                            • Automatic SSL certificate<br>
+                                            • Database setup<br>
+                                            • Container orchestration<br>
+                                            • Health monitoring
+                                        </small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+                    
+                    <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                        {% if app_name %}
+                            <a href="{{ url_for('marketplace.marketplace') }}" class="btn btn-outline-secondary">
+                                <i class="bi bi-arrow-left me-2"></i>Back to Marketplace
+                            </a>
+                        {% else %}
+                            <a href="{{ url_for('dashboard.dashboard') }}" class="btn btn-outline-secondary">
+                                <i class="bi bi-arrow-left me-2"></i>Cancel
+                            </a>
+                        {% endif %}
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-cloud-upload me-2"></i>
+                            {% if app_name %}
+                                Deploy {{ app_name }}
+                            {% else %}
+                                Create Deployment
+                            {% endif %}
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        {% if not app_name %}
+        <!-- Marketplace CTA for manual deployments -->
+        <div class="row mt-4">
+            <div class="col-md-12">
+                <div class="card border-primary">
+                    <div class="card-body text-center">
+                        <h6 class="card-title">
+                            <i class="bi bi-lightbulb me-2"></i>Looking for something specific?
+                        </h6>
+                        <p class="card-text">
+                            Browse our marketplace for pre-configured applications and one-click deployments.
+                        </p>
+                        <a href="{{ url_for('marketplace.marketplace') }}" class="btn btn-outline-primary">
+                            <i class="bi bi-shop me-2"></i>Browse Marketplace
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Form validation
+    document.querySelector('form')?.addEventListener('submit', function(e) {
+        const domain = document.getElementById('name').value;
+        const email = document.getElementById('email').value;
+        
+        // Basic domain validation
+        if (!domain.includes('.') || domain.length < 4) {
+            e.preventDefault();
+            alert('Please enter a valid domain name (e.g., example.com)');
+            return false;
+        }
+        
+        // Email validation
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(email)) {
+            e.preventDefault();
+            alert('Please enter a valid email address');
+            return false;
+        }
+        
+        // Show loading state
+        const submitBtn = this.querySelector('button[type="submit"]');
+        const originalText = submitBtn.innerHTML;
+        submitBtn.innerHTML = '<i class="bi bi-arrow-repeat me-2 spin"></i>Starting deployment...';
+        submitBtn.disabled = true;
+        
+        // Re-enable if there's an error (won't execute if form submits successfully)
+        setTimeout(() => {
+            submitBtn.innerHTML = originalText;
+            submitBtn.disabled = false;
+        }, 5000);
+    });
+    
+    // Add spinning animation for loading states
+    const style = document.createElement('style');
+    style.textContent = `
+        .spin {
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+    `;
+    document.head.appendChild(style);
+</script>
+{% endblock %}

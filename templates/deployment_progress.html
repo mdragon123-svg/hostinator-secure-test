@@ -1,0 +1,237 @@
+{% extends "base.html" %}
+
+{% block title %}Deployment Progress - Hostinator{% endblock %}
+{% block header %}Deployment Progress{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12 mb-4">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="card-title mb-0">{{ deployment['name'] }}</h5>
+                <span class="deployment-type {{ deployment['deployment_type'].lower() }}">
+                    {{ deployment['deployment_type'] }}
+                </span>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-12 text-center mb-4">
+                        <div id="deployment-status">
+                            <h4 class="mb-3">Setting up your {{ deployment['deployment_type'] }} deployment</h4>
+                            <div class="progress mb-3">
+                                <div id="progress-bar" class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 0%"></div>
+                            </div>
+                            <p id="status-message">Initializing deployment...</p>
+                        </div>
+                        
+                        <div id="deployment-complete" class="d-none">
+                            <div class="alert alert-success">
+                                <i class="bi bi-check-circle-fill me-2"></i>
+                                <span>Deployment completed successfully!</span>
+                            </div>
+                            <a href="{{ url_for('deployments.deployment_detail', id=deployment['id']) }}" class="btn btn-primary">
+                                <i class="bi bi-eye me-2"></i>View Deployment Details
+                            </a>
+                        </div>
+                        
+                        <div id="deployment-failed" class="d-none">
+                            <div class="alert alert-danger">
+                                <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                                <span>Deployment failed. Please check the logs below for details.</span>
+                            </div>
+                            <a href="{{ url_for('dashboard.dashboard') }}" class="btn btn-primary">
+                                <i class="bi bi-arrow-left me-2"></i>Return to Dashboard
+                            </a>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="row mt-3">
+                    <div class="col-md-12">
+                        <div class="card">
+                            <div class="card-header">
+                                <h6 class="card-title mb-0">Deployment Logs</h6>
+                            </div>
+                            <div class="card-body">
+                                <div class="deployment-logs bg-dark text-light p-3 rounded">
+                                    <pre class="mb-0"><code id="deployment-logs">Preparing to deploy {{ deployment['name'] }}...</code></pre>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Deployment progress steps
+    const deploymentSteps = [
+        { message: "Initializing deployment...", progress: 5 },
+        { message: "Setting up environment...", progress: 15 },
+        { message: "Creating database...", progress: 30 },
+        { message: "Configuring {{ deployment['deployment_type'] }}...", progress: 50 },
+        { message: "Setting up web server...", progress: 70 },
+        { message: "Finalizing deployment...", progress: 85 },
+        { message: "Deployment complete!", progress: 100 }
+    ];
+    
+    // Store deployment type and name for later use
+    const deploymentType = "{{ deployment['deployment_type'] }}";
+    const deploymentName = "{{ deployment['name'] }}";
+    
+    let currentStep = 0;
+    let progressInterval;
+    let statusCheckInterval;
+    let deploymentStarted = false;
+    
+    // Function to update progress UI
+    function updateProgress(step) {
+        if (step < deploymentSteps.length) {
+            document.getElementById('progress-bar').style.width = deploymentSteps[step].progress + '%';
+            document.getElementById('status-message').textContent = deploymentSteps[step].message;
+            
+            // Add log entry
+            const logs = document.getElementById('deployment-logs');
+            const timestamp = new Date().toLocaleTimeString();
+            logs.textContent += `\n[${timestamp}] ${deploymentSteps[step].message}`;
+            
+            // Auto-scroll logs to bottom
+            const logsContainer = logs.parentElement.parentElement;
+            logsContainer.scrollTop = logsContainer.scrollHeight;
+        }
+    }
+    
+    // Function to check deployment status via polling
+    function checkDeploymentStatus() {
+        fetch('/api/deployment-status/{{ deployment["id"] }}', {
+            method: 'GET',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            const logs = document.getElementById('deployment-logs');
+            const timestamp = new Date().toLocaleTimeString();
+            
+            if (data.status === 'Active') {
+                // Deployment succeeded!
+                clearInterval(progressInterval);
+                clearInterval(statusCheckInterval);
+                
+                // Complete the progress bar
+                updateProgress(deploymentSteps.length - 1);
+                
+                logs.textContent += `\n[${timestamp}] ✅ Deployment completed successfully!`;
+                // FIXED: Use the stored deploymentType variable instead of undefined
+                logs.textContent += `\n[${timestamp}] Your ${deploymentType} deployment is now active and accessible.`;
+                
+                // Show success message
+                document.getElementById('deployment-status').classList.add('d-none');
+                document.getElementById('deployment-complete').classList.remove('d-none');
+                
+            } else if (data.status === 'Failed') {
+                // Deployment failed
+                clearInterval(progressInterval);
+                clearInterval(statusCheckInterval);
+                
+                logs.textContent += `\n[${timestamp}] ❌ Deployment failed.`;
+                
+                // Show error message
+                document.getElementById('progress-bar').classList.remove('progress-bar-animated', 'progress-bar-striped');
+                document.getElementById('progress-bar').classList.add('bg-danger');
+                document.getElementById('status-message').textContent = 'Deployment failed';
+                
+                document.getElementById('deployment-status').classList.add('d-none');
+                document.getElementById('deployment-failed').classList.remove('d-none');
+            }
+            // If status is still 'Pending' or 'Deploying', continue polling
+        })
+        .catch(error => {
+            console.log('Status check error (will retry):', error);
+            // Don't stop polling on error, just log it
+        });
+    }
+    
+    // Function to execute deployment
+    function executeDeployment() {
+        // Start progress animation
+        updateProgress(currentStep);
+        
+        progressInterval = setInterval(() => {
+            currentStep++;
+            if (currentStep < deploymentSteps.length - 1) {
+                updateProgress(currentStep);
+            }
+            // Don't clear interval here - let status polling handle completion
+        }, 3000);
+        
+        // Start status polling (check every 5 seconds)
+        statusCheckInterval = setInterval(checkDeploymentStatus, 5000);
+        
+        // Make API call to start deployment (fire and forget)
+        fetch('/api/execute-deployment/{{ deployment["id"] }}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        })
+        .then(response => {
+            deploymentStarted = true;
+            const contentType = response.headers.get('content-type');
+            if (!contentType || !contentType.includes('application/json')) {
+                throw new Error('Server returned non-JSON response');
+            }
+            return response.json();
+        })
+        .then(data => {
+            // Log the immediate response but don't stop the process
+            const logs = document.getElementById('deployment-logs');
+            const timestamp = new Date().toLocaleTimeString();
+            
+            if (data.output) {
+                logs.textContent += `\n\n[${timestamp}] Server Response:\n${data.output}`;
+            }
+            
+            // The status polling will handle the final result
+        })
+        .catch(error => {
+            const logs = document.getElementById('deployment-logs');
+            const timestamp = new Date().toLocaleTimeString();
+            
+            if (!deploymentStarted) {
+                // Only show error if deployment never started
+                clearInterval(progressInterval);
+                clearInterval(statusCheckInterval);
+                
+                logs.textContent += `\n\n[${timestamp}] ❌ Failed to start deployment: ${error.message}`;
+                
+                document.getElementById('progress-bar').classList.remove('progress-bar-animated', 'progress-bar-striped');
+                document.getElementById('progress-bar').classList.add('bg-danger');
+                document.getElementById('status-message').textContent = 'Failed to start deployment';
+                
+                document.getElementById('deployment-status').classList.add('d-none');
+                document.getElementById('deployment-failed').classList.remove('d-none');
+            } else {
+                // Deployment started but API response failed - rely on status polling
+                logs.textContent += `\n[${timestamp}] Monitoring deployment status...`;
+            }
+        });
+    }
+    
+    // Cleanup intervals when page unloads
+    window.addEventListener('beforeunload', function() {
+        if (progressInterval) clearInterval(progressInterval);
+        if (statusCheckInterval) clearInterval(statusCheckInterval);
+    });
+    
+    // Start deployment when page loads
+    document.addEventListener('DOMContentLoaded', executeDeployment);
+</script>
+{% endblock %}
