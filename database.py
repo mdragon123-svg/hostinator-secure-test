@@ -4,6 +4,7 @@ Database connection and query management
 import mysql.connector
 from mysql.connector import pooling
 from contextlib import contextmanager
+import re
 import logging
 from datetime import datetime
 from config import Config
@@ -107,7 +108,9 @@ class DatabaseManager:
                 temp_cursor = temp_conn.cursor()
                 
                 # MODIFIED: Used parameterized query to prevent SQL injection
-                create_db_query = "CREATE DATABASE IF NOT EXISTS {} CHARACTER SET {} COLLATE {}".format(db_name, charset, collation)
+                if not re.match(r'^[a-zA-Z0-9_]+$', db_name):
+                    raise ValueError("Invalid database name")
+                create_db_query = f"CREATE DATABASE IF NOT EXISTS `{db_name}` CHARACTER SET {charset} COLLATE {collation}"
                 temp_cursor.execute(create_db_query)
                 temp_cursor.execute("USE {}".format(db_name))
 
